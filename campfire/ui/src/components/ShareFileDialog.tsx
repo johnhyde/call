@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../stores/root";
 import { Button, Flex, Text, Card, } from "@holium/design-system";
-import { UrchatStore } from "../stores/urchat";
+import { FileTransferStatus, UrchatStore } from "../stores/urchat";
 import { createBlob, formatBytes, } from "../util";
 import { MdUploadFile } from "react-icons/md";
 import { observer } from "mobx-react";
@@ -17,7 +17,7 @@ export const handleIncomingFileTransfer = (channel: RTCDataChannel, urchatStore:
 
     channel.binaryType = 'arraybuffer';
 
-    let receivedBuffers = [];
+    let receivedBuffers: any[] = [];
     let totalReceivedBytes = 0;
     let fileSize = 0;
 
@@ -26,22 +26,20 @@ export const handleIncomingFileTransfer = (channel: RTCDataChannel, urchatStore:
 
         try {
             if (data.byteLength) { // is piece of data
-
                 totalReceivedBytes += data.byteLength;
 
                 // updates progress
-                let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
                 fileTransfer.progress = Math.trunc((totalReceivedBytes) / (fileSize / 100));
                 urchatStore.updateFileTransfer(fileTransfer);
 
                 receivedBuffers.push(data);
             }
             else if (data == END_OF_FILE_MESSAGE) {  // is end of file
-
-                let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
                 const blob = createBlob(receivedBuffers, totalReceivedBytes, fileTransfer.fileType);
                 fileTransfer.url = window.URL.createObjectURL(blob);
-                fileTransfer.status = 'Completed';
+                fileTransfer.status = FileTransferStatus.Completed;
                 fileTransfer.progress == 100;
 
                 urchatStore.updateFileTransfer(fileTransfer);
@@ -51,7 +49,6 @@ export const handleIncomingFileTransfer = (channel: RTCDataChannel, urchatStore:
                 fileSize = 0;
 
                 channel.close();
-
             }
             else {  // other side is sending the file info? 
 
@@ -64,7 +61,7 @@ export const handleIncomingFileTransfer = (channel: RTCDataChannel, urchatStore:
                     urchatStore.setNewFileTransfer({
                         owner: urchatStore.ongoingCall.call.peer,
                         receiver: urchatStore.urbit.ship,
-                        status: 'Waiting',
+                        status: FileTransferStatus.Waiting,
                         fileName: object.fileName,
                         fileSize: object.fileSize,
                         fileType: object.fileType,
@@ -78,8 +75,8 @@ export const handleIncomingFileTransfer = (channel: RTCDataChannel, urchatStore:
 
                 }
                 else if (object.action == 'Cancel') {
-                    let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
-                    fileTransfer.status = 'Cancelled';
+                    const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                    fileTransfer.status = FileTransferStatus.Cancelled;
                     urchatStore.updateFileTransfer(fileTransfer);
                     channel.close();
                 }
@@ -94,26 +91,26 @@ export const isFileTransferChannel = (label: string) => {
     return label.includes(SHAREFILE_CHANNEL_LABEL) ? true : false;
 }
 
-type TabOption = 'Share' | 'Files';
+enum TabOptions {
+    Share, Files
+}
 
 export const ShareFileDialog = observer(() => {
     const { urchatStore } = useStore();
     const inputRef = useRef<HTMLInputElement>();
     const [files, setFiles] = useState<FileList>();
-    const [tabOpen, setTabOpen] = useState<TabOption>('Share');
+    const [tabOpen, setTabOpen] = useState<TabOptions>(TabOptions.Share);
 
     useEffect(() => {
-        urchatStore.incomingFileTransfer && setTabOpen('Files');
+        urchatStore.incomingFileTransfer && setTabOpen(TabOptions.Files);
     }, []);
 
     const handleShareClick = async () => {
 
         if (!files || files.length == 0) return;
 
-        for (var i = 0; i < files.length; i++) {
-
+        for (let i = 0; i < files.length; i++) {
             const file = files.item(i);
-
             await urchatStore.startFileTransfer((call) => {
 
                 const channel = call.conn.createDataChannel(SHAREFILE_CHANNEL_LABEL + '-' + urchatStore.ongoingCall.call.peer + '-' + (urchatStore.fileTransfers.length + i));
@@ -125,7 +122,7 @@ export const ShareFileDialog = observer(() => {
                     urchatStore.setNewFileTransfer({
                         owner: urchatStore.urbit.ship,
                         receiver: urchatStore.ongoingCall.call.peer,
-                        status: 'Waiting',
+                        status: FileTransferStatus.Waiting,
                         fileName: file.name,
                         fileSize: file.size,
                         fileType: file.type,
@@ -152,15 +149,15 @@ export const ShareFileDialog = observer(() => {
                     try {
                         const object = JSON.parse(data);
                         if (object.action == 'Accept') { // other side has accepted
-                            let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
-                            fileTransfer.status = 'Ongoing';
+                            const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                            fileTransfer.status = FileTransferStatus.Ongoing;
 
                             urchatStore.updateFileTransfer(fileTransfer);
 
                             const arrayBuffer = await file.arrayBuffer();
 
                             let paused = false;
-                            let queue = [];
+                            const queue: any[] = [];
                             let totalBytesSent = 0;
                             let hasCancelled = false;
 
@@ -197,14 +194,13 @@ export const ShareFileDialog = observer(() => {
                                             totalBytesSent += message.byteLength;
                                         }
 
-                                        let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                                        const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
 
-                                        if (fileTransfer.status !== 'Cancelled') {
-
+                                        if (fileTransfer.status !== FileTransferStatus.Cancelled) {
                                             fileTransfer.progress = Math.trunc((totalBytesSent) / (fileTransfer.fileSize / 100));
 
                                             if (message === END_OF_FILE_MESSAGE) {
-                                                fileTransfer.status = 'Completed'
+                                                fileTransfer.status = FileTransferStatus.Completed;
                                             }
 
                                             urchatStore.updateFileTransfer(fileTransfer);
@@ -229,15 +225,15 @@ export const ShareFileDialog = observer(() => {
 
                         }
                         else if (object.action === 'Reject') {
-                            let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
-                            fileTransfer.status = 'Rejected';
+                            const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                            fileTransfer.status = FileTransferStatus.Rejected;
                             urchatStore.updateFileTransfer(fileTransfer);
 
                             channel.close();
                         }
                         else if (object.action === 'Cancel') {
-                            let fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
-                            fileTransfer.status = 'Cancelled';
+                            const fileTransfer = urchatStore.getFileTransferByChannelLabel(channel.label);
+                            fileTransfer.status = FileTransferStatus.Cancelled;
                             urchatStore.updateFileTransfer(fileTransfer);
 
                             channel.close();
@@ -252,13 +248,12 @@ export const ShareFileDialog = observer(() => {
 
         }
 
-        setFiles(undefined)
 
-        if (inputRef.current)
+        if (inputRef.current) {
             inputRef.current.value = '';
-
-        setTabOpen('Files')
-
+        }
+        setFiles(undefined);
+        setTabOpen(TabOptions.Files)
     }
 
     return (
@@ -277,21 +272,21 @@ export const ShareFileDialog = observer(() => {
             >
                 <Flex className='w-full sticky py-4 pb-2 z-10 top-0 baseColor' justifyContent='center' alignItems='center'>
                     <Card>
-                        <Button className='whitespace-nowrap' variant={tabOpen == 'Share' ? 'primary' : 'secondary'}
-                            onClick={() => setTabOpen('Share')}
+                        <Button className='whitespace-nowrap' variant={tabOpen == TabOptions.Share ? 'primary' : 'secondary'}
+                            onClick={() => setTabOpen(TabOptions.Share)}
                             style={{ width: '130px' }}
                         >
                             Share Files
                         </Button>
-                        <Button className='whitespace-nowrap' variant={tabOpen == 'Share' ? 'secondary' : 'primary'}
-                            onClick={() => setTabOpen('Files')}
+                        <Button className='whitespace-nowrap' variant={tabOpen == TabOptions.Share ? 'secondary' : 'primary'}
+                            onClick={() => setTabOpen(TabOptions.Files)}
                             style={{ width: '130px' }}
                         >
                             All Files
                         </Button>
                     </Card>
                 </Flex>
-                {tabOpen === 'Share' ?
+                {tabOpen === TabOptions.Share ?
                     <Flex flexDirection='column' className=' w-full h-full' gap={16}>
                         <div style={{ borderRadius: '8px' }} className={` ${!(files === undefined || files.length === 0) && 'default-ring-always'}`}>
                             <Card>
@@ -324,7 +319,7 @@ export const ShareFileDialog = observer(() => {
                                             <Text lineHeight={1} fontWeight='bold'>{files.length + ' files selected'}</Text>
                                         </>
                                     }
-                                    <input ref={inputRef} type="file" className="w-full h-full absolute cursor-pointer opacity-0 top-0 left-0 focus:outline-none" accept="zip,application/octet-stream,application/zip,application/x-zip,application/x-zip-compressed" onChange={(e) => { e.target.files && setFiles(e.target.files) }} multiple />
+                                    <input ref={inputRef} type="file" className="w-full h-full absolute cursor-pointer opacity-0 top-0 left-0 focus:outline-none" onChange={(e) => { e.target.files && setFiles(e.target.files) }} multiple />
                                 </Flex>
                             </Card>
                         </div>
