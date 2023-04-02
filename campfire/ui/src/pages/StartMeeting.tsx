@@ -14,6 +14,7 @@ import packageJson from "../../package.json";
 import { createField, createForm } from "mobx-easy-form";
 import { resetRing, ringing } from "../stores/media";
 import { SettingsDialog } from "../components/SettingsDialog";
+import { handleIncomingFileTransfer, isFileTransferChannel } from "../components/ShareFileDialog";
 
 export const StartMeetingPage: FC<any> = observer(() => {
   document.title = "Campfire";
@@ -29,6 +30,20 @@ export const StartMeetingPage: FC<any> = observer(() => {
       icepondLoaded.current = true;
     }
   })
+
+  // if the path looks like /apps/campfire/call/zod
+  // starts call with zod
+  useEffect(() => {
+    const path = location.pathname;
+    const patp = path.split('/call/').pop();
+
+    if (path.includes('/call/') && patp && isValidPatp('~' + deSig(patp))) {
+      placeCall(deSig(patp))
+    }
+    else {
+      push('/')
+    }
+  }, [])
 
   const isSecure =
     location.protocol.startsWith("https") || location.hostname === "localhost";
@@ -68,6 +83,9 @@ export const StartMeetingPage: FC<any> = observer(() => {
       mediaStore.getDevices(call);
       urchatStore.setDataChannelOpen(false);
       urchatStore.setMessages([]);
+      urchatStore.setFileTransfers([]);
+      urchatStore.setIncomingFileTransfer(false);
+
       const channel = call.conn.createDataChannel("campfire");
       channel.onopen = () => {
         ringing.pause();
@@ -86,6 +104,15 @@ export const StartMeetingPage: FC<any> = observer(() => {
       };
       urchatStore.setDataChannel(channel);
       call.conn.ontrack = onTrack;
+
+      // handles receiving files on the caller side
+      call.conn.addEventListener("datachannel", (evt) => {
+        const channel = evt.channel;
+
+        if (isFileTransferChannel(channel.label)) {
+          handleIncomingFileTransfer(channel, urchatStore);
+        }
+      });
     });
   };
 
@@ -100,18 +127,28 @@ export const StartMeetingPage: FC<any> = observer(() => {
       push(`/chat/${conn.uuid}`);
       urchatStore.setDataChannelOpen(false);
       urchatStore.setMessages([]);
+      urchatStore.setFileTransfers([]);
+      urchatStore.setIncomingFileTransfer(false);
+
       conn.addEventListener("datachannel", (evt) => {
         const channel = evt.channel;
-        channel.onopen = () => urchatStore.setDataChannelOpen(true);
-        channel.onmessage = (evt) => {
-          const data = evt.data;
-          const new_messages = [{ speaker: peer, message: data }].concat(
-            urchatStore.messages
-          );
-          urchatStore.setMessages(new_messages);
-          console.log("channel message from me to: " + data);
-        };
-        urchatStore.setDataChannel(channel);
+
+        if (isFileTransferChannel(channel.label)) {
+          handleIncomingFileTransfer(channel, urchatStore);
+        }
+        else {   // normal urchat channel
+          channel.onopen = () => urchatStore.setDataChannelOpen(true);
+          channel.onmessage = (evt) => {
+            const data = evt.data;
+            const new_messages = [{ speaker: peer, message: data }].concat(
+              urchatStore.messages
+            );
+            urchatStore.setMessages(new_messages);
+            console.log("channel message from me to: " + data);
+          };
+          urchatStore.setDataChannel(channel);
+        }
+
       });
       conn.ontrack = onTrack;
     });
@@ -136,22 +173,20 @@ export const StartMeetingPage: FC<any> = observer(() => {
     <Flex
       //   style={{ background: "#FBFBFB" }}
       flex={1}
-      height="100vh"
-      width="100%"
       justifyContent="center"
       alignItems="center"
       flexDirection="column"
-      className="windowColor"
+      className="windowColor fixed top-0 left-0 w-full h-full"
     >
       <Flex
-        minWidth={650}
-        maxWidth={950}
-        width="50%"
-        flexDirection="row"
+        className='flex-col-reverse sm:flex-row w-full sm:w-1/2 px-4 sm:px-0'
         justifyContent="space-between"
+        alignItems='center'
       >
-        <section>
-          <Flex mb={6} flexDirection="column">
+        <section className="flex flex-col items-center sm:items-start "
+          style={{ width: '100%', maxWidth: '370px', }}
+        >
+          <Flex mb={6} flexDirection="column" width='100%'>
             <Text fontSize={9} fontWeight={500}>
               Gather around
             </Text>
@@ -159,14 +194,14 @@ export const StartMeetingPage: FC<any> = observer(() => {
               Start a call with your friend.
             </Text>
           </Flex>
-          <Flex alignItems="flex-start" flexDirection="column">
+          <Flex alignItems="flex-start" flexDirection="column" width='100%'>
             <Input
               bg="secondary"
               style={{
+                minWidth: '100%',
                 fontSize: 18,
                 height: 40,
                 borderRadius: 6,
-                minWidth: 370,
                 background: theme.light.colors.bg.secondary,
               }}
               mb={4}
@@ -210,8 +245,8 @@ export const StartMeetingPage: FC<any> = observer(() => {
             </div>
           </Flex>
         </section>
-        <section>
-          <Flex>
+        <section className="flex flex-col items-center mb-2 sm:mb-0 sm:self-start	">
+          <Flex className='w-min'>
             <Campfire />
           </Flex>
         </section>
@@ -227,18 +262,12 @@ export const StartMeetingPage: FC<any> = observer(() => {
           rejectCall={() => {
             ringing.pause();
             urchatStore.rejectCall();
+            urchatStore.hungup();
           }}
         />
       )}
-      <div
-        style={{
-          bottom: "0px",
-          left: "0px",
-          position: "absolute",
-          margin: "10px",
-        }}
-      >
-        <Flex alignItems="flex-start" flexDirection="row">
+      <Flex flexDirection="row" justifyContent='center' className='absolute left-0 bottom-0 w-full sm:w-auto mb-1 sm:mx-2 sm:my-1.5'>
+        <Flex alignItems="flex-start" flexDirection="row" >
           <Text fontSize={2} fontWeight={500} opacity={0.5}>
             v{packageJson.version}
           </Text>
@@ -265,12 +294,12 @@ export const StartMeetingPage: FC<any> = observer(() => {
                 Settings
               </Text>
             </DialogTrigger>
-            <DialogContent className="w-200 min-h-60 max-w-xl pt-4 pb-6 px-8">
+            <DialogContent className="w-200 max-w-xl  rounded-xl ">
               <SettingsDialog />
             </DialogContent>
           </Dialog>
         </Flex>
-      </div>
+      </Flex>
     </Flex>
   );
 });

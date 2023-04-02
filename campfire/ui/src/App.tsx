@@ -13,14 +13,14 @@ function App() {
       <ThemeProvider theme={theme.light}>
         <BrowserRouter basename={"/apps/campfire"}>
           <Switch>
-            <Route path="/" exact>
+            <Route path={["/", "/call/:patp"]} exact>
               <StartMeetingPage />
             </Route>
             <Route path="/chat/:uuid">
               <MeetingSpace />
             </Route>
             {/* Catch all for anything else */}
-            <Route path="*"> 
+            <Route path="*">
               <Redirect to="/" />
             </Route>
           </Switch>
