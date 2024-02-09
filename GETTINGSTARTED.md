@@ -38,7 +38,7 @@ On zod, run `+cor-registry` to see what's an approved request.
 ## Running your own coturn server
 * [Coturn](https://github.com/coturn/coturn) - `sudo dnf -y install coturn`
 * Configure and test that your coturn server is working
-* Follow the [docs](campfire/urbit/doc/iceservers.udon) to use this server in Icepond instead of the defaults
+* Follow the [docs](campfire/desk/doc/iceservers.udon) to use this server in Icepond instead of the defaults
 
 There's also some nice public/free servers:
 * https://www.metered.ca/tools/openrelay/

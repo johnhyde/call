@@ -64,7 +64,9 @@
           (fall (bind (~(get by p.jon) 'candidate') so) '')
           (bind (~(get by p.jon) 'sdpMid') so)
           (bind (~(get by p.jon) 'sdpMLineIndex') ni)
-          (bind (~(get by p.jon) 'usernameFragment') so)
+          ?~  frag=(~(gut by p.jon) 'usernameFragment' ~)
+            ~
+          `(so frag)
       ==
     ==
   ::  sdp:dejs

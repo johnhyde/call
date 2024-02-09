@@ -16,7 +16,7 @@
 +$  card  card:agent:gall
 --
 %-  agent:dbug
-%+  verb  %.n
+%+  verb  %.y
 =|  state=state-1
 ^-  agent:gall
 =<

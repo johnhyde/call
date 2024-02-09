@@ -126,7 +126,7 @@ class UrbitRTCApp extends EventTarget {
    * @returns {UrbitRTCPeerConnection} connection which is awaiting pick-up by the remote
    */
   call(peer: string, dap: string) {
-    console.log("attempting to call")
+    console.log('attempting to call');
     return new UrbitRTCPeerConnection(peer, dap, undefined, this._urbit, this.configuration);
   }
 }
@@ -352,7 +352,7 @@ class UrbitRTCPeerConnection extends RTCPeerConnection {
   async sendSignal() {
     const signalType = this.signallingState.waitingType();
     if (this.urbit.verbose) {
-      console.log("Sending SDP ${signalType}");
+      console.log(`Sending SDP ${signalType}`);
     }
     this.signallingState.sending();
     if (signalType === 'offer') {
@@ -418,7 +418,7 @@ class UrbitRTCPeerConnection extends RTCPeerConnection {
         return;
       case 'sdp':
         if (this.urbit.verbose) {
-          console.log("Got SDP ${fact.type}");
+          console.log(`Got SDP ${fact.type}`);
         }
         this.signallingState.startSettingRemote();
         this.handleSDP(fact).then(() => this.signallingState.doneSettingRemote());
@@ -449,8 +449,8 @@ class UrbitRTCPeerConnection extends RTCPeerConnection {
 
   dispatchUrbitState(state: UrbitState) {
     if (this.urbit.verbose) {
-      console.log('rtcswitchboard state', state)
-    };
+      console.log('rtcswitchboard state', state);
+    }
     switch (state) {
       case 'connected-our-turn':
       case 'connected-their-turn':
@@ -461,7 +461,7 @@ class UrbitRTCPeerConnection extends RTCPeerConnection {
         break;
       default:
         break;
-    };
+    }
 
     this.urbitState = state;
     const evt = new UrbitRTCStateChangedEvent(this.uuid || '', state);

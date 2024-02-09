@@ -1,3 +1,4 @@
+.env.local
 *.md.backup
 helper-script.sh
 dev-ships
